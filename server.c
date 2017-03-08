@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
     char s[INET6_ADDRSTRLEN];
     int rv;
 
+    FILE *in = fopen("output.txt", "w+");
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -165,7 +166,7 @@ int main(int argc, char *argv[])
                     exit(1);
                     }
                 
-                if (loop_write(STDOUT_FILENO, buf, sizeof(buf)) != sizeof(buf))
+                if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf))
                     {
                     fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
                     //goto finish;

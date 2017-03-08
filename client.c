@@ -50,6 +50,26 @@ int clientSocket; //for signal handling
 //         }
 //     }
 
+static ssize_t loop_write(int fd, const void*data, size_t size) {
+    ssize_t ret = 0;
+
+    while (size > 0) {
+        ssize_t r;
+
+        if ((r = write(fd, data, size)) < 0)
+            return r;
+
+        if (r == 0)
+            break;
+
+        ret += r;
+        data = (const uint8_t*) data + r;
+        size -= (size_t) r;
+    }
+
+    return ret;
+}
+
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -68,6 +88,7 @@ int main(int argc, char *argv[])
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s_array[INET6_ADDRSTRLEN];
+    FILE *in = fopen("input.txt", "w+");
 
     //Signal handler
     // if (signal(SIGINT, my_handler_for_sigint) == SIG_ERR)
@@ -173,10 +194,10 @@ int main(int argc, char *argv[])
             goto finish;
         }
         /* And write it to STDOUT by passing it as file descriptor to function.*/
-        // if (loop_write(STDOUT_FILENO, buf, sizeof(buf)) != sizeof(buf)) {
-        //     fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
-        //     goto finish;
-        // }
+        if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf)) {
+            fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+            goto finish;
+        }
     }
 
     close(sockfd);
