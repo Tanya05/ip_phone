@@ -61,26 +61,6 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-static ssize_t loop_write(int fd, const void*data, size_t size) {
-    ssize_t ret = 0;
-
-    while (size > 0) {
-        ssize_t r;
-
-        if ((r = write(fd, data, size)) < 0)
-            return r;
-
-        if (r == 0)
-            break;
-
-        ret += r;
-        data = (const uint8_t*) data + r;
-        size -= (size_t) r;
-    }
-
-    return ret;
-}
-
 int main(int argc, char *argv[])
 {
     int sockfd;  
@@ -186,7 +166,7 @@ int main(int argc, char *argv[])
         }
 
         //if (send(sockfd, buf, MAXDATASIZE-1, 0) == -1){
-        if (loop_write(sockfd, buf, sizeof(buf)) != sizeof(buf)) {
+        if (send(sockfd, buf, sizeof(buf),0) ==-1) {
             fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
             close(sockfd);
             perror("send");
