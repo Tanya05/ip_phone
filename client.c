@@ -17,7 +17,7 @@
 #include <pulse/error.h>
 #include <pulse/gccmacro.h>
 
-//#define PORT "3490" // the port client will be connecting to 
+//#define PORT "3490" //can hardcode the port client will be connecting to, here accepts from user so commented out 
 
 //#define MAXDATASIZE 100 // max number of bytes we can get at once 
 #define BUFSIZE 1024
@@ -25,49 +25,53 @@
 int clientSocket; //for signal handling
 
 //Signal Handler
-// void my_handler_for_sigint(int signumber)
-//     {
-//     char ans[2];
-//     if (signumber == SIGINT)
-//         {
-//         printf("received SIGINT\n");
-//         printf("Program received a CTRL-C\n");
-//         printf("Terminate Y/N : "); 
-//         scanf("%s", ans);
-//         if ((strcmp(ans,"Y") == 0)||(strcmp(ans,"y") == 0))
-//             {
-//             printf("Exiting ....\n");
-//             if (send(clientSocket, "Ending Connection.", MAXDATASIZE-1, 0) == -1)//will send end of connection string in the end
-//                 {
-//                 close(clientSocket);
-//                 perror("send");
-//                 }
-//             close(clientSocket);
-//             exit(0); 
-//             }
-//         else
-//             printf("Continung ..\n");
-//         }
-//     }
+void my_handler_for_sigint(int signumber)
+    {
+    char ans[2];
+    if (signumber == SIGINT)
+        {
+        printf("received SIGINT\n");
+        printf("Program received a CTRL-C\n");
+        printf("Terminate Y/N : "); 
+        scanf("%s", ans);
+        if ((strcmp(ans,"Y") == 0)||(strcmp(ans,"y") == 0))
+            {
+            printf("Exiting ....\n");
+            if (send(clientSocket, "Ending Connection.", BUFSIZE-1, 0) == -1)//will send end of connection string in the end
+                {
+                close(clientSocket);
+                perror("send");
+                }
+            close(clientSocket);
+            exit(0); 
+            }
+        else
+            printf("Continung ..\n");
+        }
+    }
 
-static ssize_t loop_write(int fd, const void*data, size_t size) {
-    ssize_t ret = 0;
+static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size) {
+    ssize_t ret = 0; //This data type is used to represent the sizes of blocks that can be read or written in a single operation of a sifned type.
 
-    while (size > 0) {
-        ssize_t r;
+    while (size > 0) //because of this exactly the number of bytes recorded is written 
+        {
+        ssize_t r; 
 
-        if ((r = write(fd, data, size)) < 0)
+        if (r= send(sockfd, data, size,0) < 0) //write returns no of bytes written
+            return r;
+
+        if ((r = write(fd, data, size)) < 0) 
             return r;
 
         if (r == 0)
-            break;
+            break; //go to next iteration as the following steps are for nothing if r = 0 
 
-        ret += r;
-        data = (const uint8_t*) data + r;
-        size -= (size_t) r;
-    }
+        ret += r; //ret keeping a track of all bytes wriiten
+        data = (const uint8_t*) data + r; //uint8_t is an unsigned 8 bit integer.
+        size -= (size_t) r; //size being reduced by number of bytes written in one iteration
+        }
 
-    return ret;
+    return ret; //ret finally is thus the total number of bytes written
 }
 
 
@@ -84,22 +88,22 @@ void *get_in_addr(struct sockaddr *sa)
 int main(int argc, char *argv[])
 {
     int sockfd;  
-    //char buf[MAXDATASIZE];
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s_array[INET6_ADDRSTRLEN];
     FILE *in = fopen("input.txt", "w+");
 
     //Signal handler
-    // if (signal(SIGINT, my_handler_for_sigint) == SIG_ERR)
-    //   printf("\ncan't catch SIGINT\n");
+    if (signal(SIGINT, my_handler_for_sigint) == SIG_ERR)
+      printf("\ncan't catch SIGINT\n");
 
-    // if (argc != 3) {
-    //     fprintf(stderr,"usage: client hostname port_number\n");
-    //     exit(1);
-    // }
+    if (argc != 3) 
+        {
+        fprintf(stderr,"usage: client hostname port_number\n");
+        exit(1);
+        }
 
-//////////////// create stream////////////////////////////////////////////////////
+/////////////////////////////// create stream////////////////////////////////////////////////////
   static const pa_sample_spec ss = {
         .format = PA_SAMPLE_S16LE,
         .rate = 44100,
@@ -127,7 +131,7 @@ int main(int argc, char *argv[])
         goto finish;
     }
 
-////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////// connect to socket//////////////////////////////////////////////////////
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -165,40 +169,37 @@ int main(int argc, char *argv[])
     printf("client: connecting to %s\n", s_array);
 
     freeaddrinfo(servinfo); // all done with this structure
-    clientSocket = sockfd; //signal handling
-   
+    clientSocket = sockfd; //assigning to global variable for signal handling signal handling
 
-    // while(1){
-    //     scanf("%s", buf);
-    //     if (send(sockfd, buf, MAXDATASIZE-1, 0) == -1){
-    //         close(sockfd);
-    //         perror("send");
-    //     }
-    // }
+    
+////////////////////////////// record and send to server over socket////////////////////////////////////
 
-
+    //loop for recording data and send over socket
     for (;;) {
         uint8_t buf[BUFSIZE];
 
         /* Record some data ... */
-        if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) {
+        if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) //this records from microphone
+            {
             fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
             goto finish;
-        }
+            }
 
-        //if (send(sockfd, buf, MAXDATASIZE-1, 0) == -1){
-        if (send(sockfd, buf, sizeof(buf),0) ==-1) {
+        if (loop_write(fileno(in), sockfd, buf, sizeof(buf)) != sizeof(buf)) 
+            {
             fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
             close(sockfd);
             perror("send");
             goto finish;
-        }
+            }
         /* And write it to STDOUT by passing it as file descriptor to function.*/
-        if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf)) {
-            fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
-            goto finish;
-        }
+        // if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf)) {
+        //     fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+        //     goto finish;
+        // }
     }
+
+    ret = 0;
 
     close(sockfd);
     finish:
