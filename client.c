@@ -50,7 +50,8 @@ void my_handler_for_sigint(int signumber)
         }
     }
 
-static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size) {
+static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size) 
+    {
     ssize_t ret = 0; //This data type is used to represent the sizes of blocks that can be read or written in a single operation of a sifned type.
 
     while (size > 0) //because of this exactly the number of bytes recorded is written 
@@ -72,21 +73,22 @@ static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size) {
         }
 
     return ret; //ret finally is thus the total number of bytes written
-}
+    }
 
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
+    {
+    if (sa->sa_family == AF_INET) 
+        {
         return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
+        }
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
+    }
 
 int main(int argc, char *argv[])
-{
+    {
     int sockfd;  
     struct addrinfo hints, *servinfo, *p;
     int rv;
@@ -118,7 +120,7 @@ int main(int argc, char *argv[])
                   argv[0],             // Our application's name.
                   PA_STREAM_RECORD,    // Record stream. 
                   NULL,                // Use the default device.
-                  "record",          // Description of our stream.
+                  "record",            // Description of our stream.
                   &ss,                 // Our sample format.
                   NULL,                // Use default channel map
                   NULL,                // Use default buffering attributes.
@@ -137,32 +139,35 @@ int main(int argc, char *argv[])
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) 
+        {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
-    }
-
-    // loop through all the results and connect to the first we can
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                p->ai_protocol)) == -1) {
-            perror("client: socket");
-            continue;
         }
 
-        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+    // loop through all the results and connect to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) 
+        {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) 
+            {
+            perror("client: socket");
+            continue;
+            }
+
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) 
+            {
             close(sockfd);
             perror("client: connect");
             continue;
+            }
+        break;
         }
 
-        break;
-    }
-
-    if (p == NULL) {
+    if (p == NULL) 
+        {
         fprintf(stderr, "client: failed to connect\n");
         return 2;
-    }
+        }
 
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
             s_array, sizeof s_array);
@@ -175,7 +180,8 @@ int main(int argc, char *argv[])
 ////////////////////////////// record and send to server over socket////////////////////////////////////
 
     //loop for recording data and send over socket
-    for (;;) {
+    for (;;) 
+        {
         uint8_t buf[BUFSIZE];
 
         /* Record some data ... */
@@ -192,12 +198,7 @@ int main(int argc, char *argv[])
             perror("send");
             goto finish;
             }
-        /* And write it to STDOUT by passing it as file descriptor to function.*/
-        // if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf)) {
-        //     fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
-        //     goto finish;
-        // }
-    }
+        }
 
     ret = 0;
 
@@ -210,4 +211,4 @@ int main(int argc, char *argv[])
     return ret;
 
     //return 0;
-}
+    }
