@@ -1,5 +1,5 @@
 /*
-** client.c -- a stream socket client demo
+** client.c -- a stream socket client demo to send audio over a socket
 */
 
 #include <stdio.h>
@@ -50,6 +50,7 @@ void my_handler_for_sigint(int signumber)
         }
     }
 
+/* A simple routine calling UNIX write() and send() in a loop */
 static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size) 
     {
     ssize_t ret = 0; //This data type is used to represent the sizes of blocks that can be read or written in a single operation of a sifned type.
@@ -106,11 +107,12 @@ int main(int argc, char *argv[])
         }
 
 /////////////////////////////// create stream////////////////////////////////////////////////////
-  static const pa_sample_spec ss = {
+    static const pa_sample_spec ss = 
+        {
         .format = PA_SAMPLE_S16LE,
         .rate = 44100,
         .channels = 2
-    };
+        };
     pa_simple *s = NULL;
     int ret = 1;
     int error;
