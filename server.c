@@ -22,6 +22,13 @@
 
 #define BACKLOG 10     // how many pending connections queue will hold
 #define BUFSIZE 1024
+#define INTERVAL 2        /* number of milliseconds to go off */
+
+int sockfd, new_fd;
+uint8_t buf[BUFSIZE];
+pa_simple *s;
+int error;
+FILE *in;
 
 void sigchld_handler(int s)
     {
@@ -33,6 +40,18 @@ void sigchld_handler(int s)
     WNOHANG means return immediately if no child has exited. See man page for more details.*/
     while(waitpid(-1, NULL, WNOHANG) > 0);
     errno = saved_errno;
+    }
+
+
+void stream_read();
+
+//Signal Handler
+void my_handler_for_sigint(int signumber)
+    {
+    if (signumber==SIGALRM)
+        {
+        stream_read();
+        }
     }
 
 
@@ -69,9 +88,46 @@ static ssize_t loop_write(int fd, const void*data, size_t size)
     return ret;
     }
 
+    
+void stream_read()
+    {    
+    //uint8_t buf[BUFSIZE];
+    ssize_t r;
+
+    /* Read some data ... */
+    if ((r = read(new_fd, buf, sizeof(buf))) <= 0) 
+        {
+        if (r == 0) /* EOF */
+            return;
+        fprintf(stderr, __FILE__": read() failed: %s\n", strerror(errno));
+        if (s)
+            pa_simple_free(s);
+        }
+
+    /* ... and play it */
+    if (pa_simple_write(s, buf, (size_t) r, &error) < 0) 
+        {
+        fprintf(stderr, __FILE__": pa_simple_write() failed: %s\n", pa_strerror(error));
+        if (s)
+            pa_simple_free(s);
+        }
+
+    if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf))
+        {
+        fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+        //goto finish;
+        }
+
+    if(strcmp(buf, "Ending Connection.")==0)
+        {
+        close(new_fd);
+        exit(0);
+        }
+    }
+
 int main(int argc, char *argv[])
     {
-    int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd : both are file descriptors
+    //int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd : both are file descriptors
     int numbytes;
     //char buf[MAXDATASIZE];
     struct addrinfo hints, *servinfo, *p;
@@ -84,7 +140,19 @@ int main(int argc, char *argv[])
 
     int ret = 1;
 
-    FILE *in = fopen("output.txt", "w+");
+    in = fopen("output.txt", "w+");
+
+    struct itimerval it_val;    /* for setting itimer */
+
+  /* Upon SIGALRM, call stream_read().
+   * Set interval timer.  We want frequency in ms, 
+   * but the setitimer call needs seconds and useconds. */
+    it_val.it_value.tv_sec =     INTERVAL/1000;
+    it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;   
+    it_val.it_interval = it_val.it_value;
+
+    if (signal(SIGALRM, my_handler_for_sigint) == SIG_ERR)
+      printf("\ncan't catch SIGALRM\n");
     
 
     ////////////////////////////////////Binding to socket and accepting connections///////////////////
@@ -183,8 +251,8 @@ int main(int argc, char *argv[])
                 };
 
             /*pa_simple Struct Reference. An opaque simple connection object. */
-            pa_simple *s = NULL;
-            int error;
+            //pa_simple *s = NULL;
+            //int error;
                 
             /* Create a new playback stream */
             //this helps connect to the server
@@ -194,39 +262,48 @@ int main(int argc, char *argv[])
                 goto finish;
                 }
 
-            while(1)
-                {    
-                uint8_t buf[BUFSIZE];
-                ssize_t r;
 
-                /* Read some data ... */
-                if ((r = read(new_fd, buf, sizeof(buf))) <= 0) 
-                    {
-                    if (r == 0) /* EOF */
-                        break;
-                    fprintf(stderr, __FILE__": read() failed: %s\n", strerror(errno));
-                    goto finish;
-                    }
-
-                /* ... and play it */
-                if (pa_simple_write(s, buf, (size_t) r, &error) < 0) 
-                    {
-                    fprintf(stderr, __FILE__": pa_simple_write() failed: %s\n", pa_strerror(error));
-                    goto finish;
-                    }
-
-                if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf))
-                    {
-                    fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
-                    //goto finish;
-                    }
-
-                if(strcmp(buf, "Ending Connection.")==0)
-                    {
-                    close(new_fd);
-                    exit(0);
-                    }
+            if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) 
+                {
+                perror("error calling setitimer()");
+                exit(1);
                 }
+
+    while (1) 
+        pause();
+            // while(1)
+            //     {    
+            //     uint8_t buf[BUFSIZE];
+            //     ssize_t r;
+
+            //     /* Read some data ... */
+            //     if ((r = read(new_fd, buf, sizeof(buf))) <= 0) 
+            //         {
+            //         if (r == 0) /* EOF */
+            //             break;
+            //         fprintf(stderr, __FILE__": read() failed: %s\n", strerror(errno));
+            //         goto finish;
+            //         }
+
+            //     /* ... and play it */
+            //     if (pa_simple_write(s, buf, (size_t) r, &error) < 0) 
+            //         {
+            //         fprintf(stderr, __FILE__": pa_simple_write() failed: %s\n", pa_strerror(error));
+            //         goto finish;
+            //         }
+
+            //     if (loop_write(fileno(in), buf, sizeof(buf)) != sizeof(buf))
+            //         {
+            //         fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+            //         //goto finish;
+            //         }
+
+            //     if(strcmp(buf, "Ending Connection.")==0)
+            //         {
+            //         close(new_fd);
+            //         exit(0);
+            //         }
+            //     }
             finish:
 
             if (s)
