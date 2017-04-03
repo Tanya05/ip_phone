@@ -17,7 +17,7 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <pulse/gccmacro.h>
-
+#include "codec.c"
 //#define PORT "3490"  // the port users will be connecting to
 
 #define BACKLOG 10     // how many pending connections queue will hold
@@ -93,7 +93,7 @@ void stream_read()
     {    
     //uint8_t buf[BUFSIZE];
     ssize_t r;
-
+    int i;
     /* Read some data ... */
     if ((r = read(new_fd, buf, sizeof(buf))) <= 0) 
         {
@@ -102,6 +102,13 @@ void stream_read()
         fprintf(stderr, __FILE__": read() failed: %s\n", strerror(errno));
         if (s)
             pa_simple_free(s);
+        }
+
+    
+    /* decoding using g711 */
+    for(i=0; i<BUFSIZE; i++)
+        {   
+        buf[i] = (uint8_t)ulaw2linear((int)buf[i]);
         }
 
     /* ... and play it */

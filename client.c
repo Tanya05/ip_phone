@@ -16,6 +16,7 @@
 #include <pulse/simple.h>
 #include <pulse/error.h>
 #include <pulse/gccmacro.h>
+#include "codec.c"
 
 //#define PORT "3490" //can hardcode the port client will be connecting to, here accepts from user so commented out 
 
@@ -89,11 +90,18 @@ static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size)
     }
 
 void stream_read()
-{
+    {
+    int i;
     if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) //this records from microphone
         {
         fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
         //goto finish;
+        }
+
+    /* encoding using g711 */
+    for(i=0; i<BUFSIZE; i++)
+        {   
+        buf[i] = (uint8_t)linear2ulaw((int)buf[i]);
         }
 
     if (loop_write(fileno(in), sockfd, buf, sizeof(buf)) != sizeof(buf)) 
@@ -103,7 +111,7 @@ void stream_read()
         perror("send");
         //goto finish;
         }
-}
+    }
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
