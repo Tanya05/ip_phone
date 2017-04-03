@@ -21,8 +21,16 @@
 
 //#define MAXDATASIZE 100 // max number of bytes we can get at once 
 #define BUFSIZE 1024
+#define INTERVAL 2        /* number of milliseconds to go off */
 
+uint8_t buf[BUFSIZE];
+int sockfd; 
+FILE *in; 
+pa_simple *s;
 int clientSocket; //for signal handling
+int error;
+
+void stream_read();
 
 //Signal Handler
 void my_handler_for_sigint(int signumber)
@@ -47,6 +55,10 @@ void my_handler_for_sigint(int signumber)
             }
         else
             printf("Continung ..\n");
+        }
+    else if (signumber==SIGALRM)
+        {
+        stream_read();
         }
     }
 
@@ -76,6 +88,22 @@ static ssize_t loop_write(int fd, int sockfd, const void*data, size_t size)
     return ret; //ret finally is thus the total number of bytes written
     }
 
+void stream_read()
+{
+    if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) //this records from microphone
+        {
+        fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
+        //goto finish;
+        }
+
+    if (loop_write(fileno(in), sockfd, buf, sizeof(buf)) != sizeof(buf)) 
+        {
+        fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+        close(sockfd);
+        perror("send");
+        //goto finish;
+        }
+}
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -90,15 +118,26 @@ void *get_in_addr(struct sockaddr *sa)
 
 int main(int argc, char *argv[])
     {
-    int sockfd;  
+    //int sockfd;  
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char s_array[INET6_ADDRSTRLEN];
-    FILE *in = fopen("input.txt", "w+");
+    in = fopen("input.txt", "w+");
+
+    struct itimerval it_val;    /* for setting itimer */
+
+  /* Upon SIGALRM, call stream_read().
+   * Set interval timer.  We want frequency in ms, 
+   * but the setitimer call needs seconds and useconds. */
+    it_val.it_value.tv_sec =     INTERVAL/1000;
+    it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;   
+    it_val.it_interval = it_val.it_value;
 
     //Signal handler
     if (signal(SIGINT, my_handler_for_sigint) == SIG_ERR)
       printf("\ncan't catch SIGINT\n");
+    if (signal(SIGALRM, my_handler_for_sigint) == SIG_ERR)
+      printf("\ncan't catch SIGALRM\n");
 
     if (argc != 3) 
         {
@@ -113,7 +152,7 @@ int main(int argc, char *argv[])
         .rate = 44100,
         .channels = 2
         };
-    pa_simple *s = NULL;
+    //pa_simple *s = NULL;
     int ret = 1;
     int error;
 
@@ -182,25 +221,35 @@ int main(int argc, char *argv[])
 ////////////////////////////// record and send to server over socket////////////////////////////////////
 
     //loop for recording data and send over socket
-    for (;;) 
+    
+    if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) 
         {
-        uint8_t buf[BUFSIZE];
-
-        /* Record some data ... */
-        if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) //this records from microphone
-            {
-            fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
-            goto finish;
-            }
-
-        if (loop_write(fileno(in), sockfd, buf, sizeof(buf)) != sizeof(buf)) 
-            {
-            fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
-            close(sockfd);
-            perror("send");
-            goto finish;
-            }
+        perror("error calling setitimer()");
+        exit(1);
         }
+
+    while (1) 
+        pause();
+
+    // for (;;) 
+    //     {
+    //     //uint8_t buf[BUFSIZE];
+
+    //     /* Record some data ... */
+    //     if (pa_simple_read(s, buf, sizeof(buf), &error) < 0) //this records from microphone
+    //         {
+    //         fprintf(stderr, __FILE__": pa_simple_read() failed: %s\n", pa_strerror(error));
+    //         goto finish;
+    //         }
+
+    //     if (loop_write(fileno(in), sockfd, buf, sizeof(buf)) != sizeof(buf)) 
+    //         {
+    //         fprintf(stderr, __FILE__": write() failed: %s\n", strerror(errno));
+    //         close(sockfd);
+    //         perror("send");
+    //         goto finish;
+    //         }
+    //     }
 
     ret = 0;
 
